@@ -28,32 +28,50 @@ function App() {
   // Initialize API connection on mount
   useEffect(() => {
     const initialize = async () => {
+      console.log("🔄 Starting API initialization...");
       setIsInitializing(true);
       setError(null);
 
       try {
         const result = await initializeApi();
+        console.log("📡 API result:", result);
 
         if (result.connected && result.token) {
+          console.log("✅ Setting backend connected to true");
           setBackendConnected(true);
           setAuthToken(result.token);
           console.log("✅ Backend connected:", result.health);
         } else {
+          console.log("❌ Backend not connected:", result);
           setBackendConnected(false);
           setError("Failed to connect to backend. Make sure the Python server is running.");
         }
       } catch (err) {
+        console.log("❌ Initialization error:", err);
         setBackendConnected(false);
         setError(`Backend initialization failed: ${err}`);
         console.error("Initialization error:", err);
       } finally {
         setIsInitializing(false);
+        console.log("🏁 Initialization complete. State:", {
+          backendConnected: state.backendConnected,
+          isInitializing: false
+        });
       }
     };
 
     initialize();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
+
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log("📊 State updated:", {
+      backendConnected: state.backendConnected,
+      hasToken: !!state.authToken,
+      queueSize: state.queue.size
+    });
+  }, [state.backendConnected, state.authToken, state.queue.size]);
 
   // Handle adding multiple files
   const handleFilesAdded = (files: QueuedFile[]) => {
