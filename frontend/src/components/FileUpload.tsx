@@ -126,10 +126,17 @@ export default function FileUpload({ onFilesAdded, disabled = false }: FileUploa
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    console.log("Click handler triggered, disabled:", disabled, "ref:", fileInputRef.current);
+    console.log("🖱️ Click handler triggered");
+    console.log("🖱️ Disabled:", disabled);
+    console.log("🖱️ Ref exists:", !!fileInputRef.current);
+    console.log("🖱️ Ref value:", fileInputRef.current);
+
     if (!disabled && fileInputRef.current) {
+      console.log("🖱️ About to trigger file input click");
       fileInputRef.current.click();
-      console.log("Triggered file input click");
+      console.log("🖱️ File input click triggered");
+    } else {
+      console.log("⚠️ Cannot trigger click - disabled:", disabled, "has ref:", !!fileInputRef.current);
     }
   };
 
