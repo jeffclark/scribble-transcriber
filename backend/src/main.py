@@ -28,7 +28,13 @@ app = FastAPI(
 # Add CORS middleware for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:*", "tauri://localhost"],
+    allow_origins=[
+        "http://localhost:1420",  # Vite dev server
+        "http://127.0.0.1:1420",
+        "http://localhost:3000",  # Alternative dev port
+        "tauri://localhost",      # Tauri in production
+        "https://tauri.localhost", # Tauri HTTPS
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
