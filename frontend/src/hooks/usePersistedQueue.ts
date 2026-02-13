@@ -115,8 +115,7 @@ export function usePersistedQueue() {
    * Set backend connection status
    */
   const setBackendConnected = (connected: boolean) => {
-    if (!isMountedRef.current) return;
-
+    // Note: No mount check here - setState is safe even after unmount
     setState((prev) => ({ ...prev, backendConnected: connected }));
   };
 
@@ -124,8 +123,7 @@ export function usePersistedQueue() {
    * Set auth token
    */
   const setAuthToken = (token: string | null) => {
-    if (!isMountedRef.current) return;
-
+    // Note: No mount check here - setState is safe even after unmount
     setState((prev) => ({ ...prev, authToken: token }));
   };
 
