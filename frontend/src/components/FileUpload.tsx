@@ -94,6 +94,7 @@ export default function FileUpload({ onFilesAdded, disabled = false }: FileUploa
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("File input change event:", e.target.files);
     const files = e.target.files;
     if (files && files.length > 0) {
       processFiles(files);
@@ -105,9 +106,12 @@ export default function FileUpload({ onFilesAdded, disabled = false }: FileUploa
     }
   };
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log("Click handler triggered, disabled:", disabled, "ref:", fileInputRef.current);
     if (!disabled && fileInputRef.current) {
       fileInputRef.current.click();
+      console.log("Triggered file input click");
     }
   };
 
