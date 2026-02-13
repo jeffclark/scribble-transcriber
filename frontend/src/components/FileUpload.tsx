@@ -32,15 +32,27 @@ export default function FileUpload({ onFilesAdded, disabled = false }: FileUploa
   };
 
   const processFiles = (files: FileList) => {
+    console.log("📁 processFiles called with FileList:", files);
+    console.log("📁 Number of files:", files.length);
+
     const validFiles: QueuedFile[] = [];
     const errors: string[] = [];
 
-    Array.from(files).forEach((file) => {
+    Array.from(files).forEach((file, index) => {
+      console.log(`📄 Processing file ${index + 1}:`, {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        path: (file as any).path
+      });
+
       const error = validateFile(file);
 
       if (error) {
+        console.log(`❌ Validation failed:`, error);
         errors.push(`${file.name}: ${error}`);
       } else {
+        console.log(`✅ Validation passed`);
         const queuedFile: QueuedFile = {
           status: "pending",
           id: crypto.randomUUID(),
@@ -48,16 +60,22 @@ export default function FileUpload({ onFilesAdded, disabled = false }: FileUploa
           path: (file as any).path || file.name, // Tauri provides full path
           size: file.size,
         };
+        console.log(`✅ Created queued file:`, queuedFile);
         validFiles.push(queuedFile);
       }
     });
+
+    console.log(`📊 Results: ${validFiles.length} valid, ${errors.length} errors`);
 
     if (errors.length > 0) {
       alert(`Some files were skipped:\n\n${errors.join("\n")}`);
     }
 
     if (validFiles.length > 0) {
+      console.log(`✅ Calling onFilesAdded with ${validFiles.length} files`);
       onFilesAdded(validFiles);
+    } else {
+      console.log(`⚠️ No valid files to add`);
     }
   };
 
