@@ -2,7 +2,8 @@
  * File upload component with drag-and-drop support
  */
 
-import { useState, useRef } from "react";
+import { useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import type { QueuedFile } from "../types/transcription";
 
 const ALLOWED_EXTENSIONS = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".m4v"];
@@ -15,7 +16,6 @@ interface FileUploadProps {
 
 export default function FileUpload({ onFilesAdded, disabled = false }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validateFile = (file: File): string | null => {
     const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
@@ -111,32 +111,65 @@ export default function FileUpload({ onFilesAdded, disabled = false }: FileUploa
     }
   };
 
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("File input change event:", e.target.files);
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      processFiles(files);
-    }
-
-    // Reset input so same file can be selected again
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     console.log("🖱️ Click handler triggered");
     console.log("🖱️ Disabled:", disabled);
-    console.log("🖱️ Ref exists:", !!fileInputRef.current);
-    console.log("🖱️ Ref value:", fileInputRef.current);
 
-    if (!disabled && fileInputRef.current) {
-      console.log("🖱️ About to trigger file input click");
-      fileInputRef.current.click();
-      console.log("🖱️ File input click triggered");
-    } else {
-      console.log("⚠️ Cannot trigger click - disabled:", disabled, "has ref:", !!fileInputRef.current);
+    if (disabled) {
+      console.log("⚠️ Upload disabled");
+      return;
+    }
+
+    try {
+      console.log("🖱️ Opening native file dialog...");
+
+      // Use Tauri's native file dialog
+      const selected = await open({
+        multiple: true,
+        filters: [{
+          name: "Video Files",
+          extensions: ["mp4", "mov", "avi", "mkv", "webm", "flv", "m4v"]
+        }]
+      });
+
+      console.log("📁 Dialog result:", selected);
+
+      if (!selected) {
+        console.log("⚠️ No files selected (user cancelled)");
+        return;
+      }
+
+      // Convert paths to QueuedFile objects
+      const paths = Array.isArray(selected) ? selected : [selected];
+      console.log("📁 Selected paths:", paths);
+
+      const validFiles: QueuedFile[] = [];
+
+      for (const path of paths) {
+        console.log(`📄 Processing path: ${path}`);
+
+        // Extract filename from path
+        const filename = path.split(/[\\/]/).pop() || path;
+
+        const queuedFile: QueuedFile = {
+          status: "pending",
+          id: crypto.randomUUID(),
+          name: filename,
+          path: path,
+          size: 0, // We don't have size from dialog, backend will validate
+        };
+
+        console.log(`✅ Created queued file:`, queuedFile);
+        validFiles.push(queuedFile);
+      }
+
+      if (validFiles.length > 0) {
+        console.log(`✅ Adding ${validFiles.length} files to queue`);
+        onFilesAdded(validFiles);
+      }
+    } catch (error) {
+      console.error("❌ Error opening file dialog:", error);
     }
   };
 
@@ -154,16 +187,6 @@ export default function FileUpload({ onFilesAdded, disabled = false }: FileUploa
       onDrop={handleDrop}
       onClick={handleClick}
     >
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept={ALLOWED_EXTENSIONS.join(",")}
-        onChange={handleFileInputChange}
-        className="hidden"
-        disabled={disabled}
-      />
-
       <div className="flex flex-col items-center gap-4">
         <svg
           className="w-16 h-16 text-gray-400"
