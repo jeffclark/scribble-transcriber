@@ -3,7 +3,7 @@
 import gc
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 from faster_whisper import WhisperModel
@@ -33,7 +33,7 @@ class GPUManager:
         self._device, self._compute_type = self._detect_device()
         logger.info(f"GPU Manager initialized - device: {self._device}, compute_type: {self._compute_type}")
 
-    def _detect_device(self) -> tuple[str, str]:
+    def _detect_device(self) -> Tuple[str, str]:
         """
         Detect best available device.
 
@@ -180,7 +180,7 @@ class GPUManager:
         """Check if model is loaded and ready for transcription."""
         return self._model is not None
 
-    def get_device_info(self) -> dict[str, str]:
+    def get_device_info(self) -> dict:
         """
         Get current device information.
 

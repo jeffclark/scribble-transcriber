@@ -1,10 +1,11 @@
 """Security utilities for authentication and token management."""
 
 import secrets
+from typing import Optional
 from fastapi import Header, HTTPException, status
 
 # Global auth token (generated at startup)
-_AUTH_TOKEN: str | None = None
+_AUTH_TOKEN: Optional[str] = None
 
 
 def generate_auth_token() -> str:

@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from ..models.responses import TranscribeResponse, TranscriptionMetadata, TranscriptionSegment
 from ..utils.validation import VideoValidationError, validate_video_path
@@ -43,7 +44,7 @@ class TranscriptionService:
         return self._initialized
 
     async def transcribe(
-        self, file_path: str, model_size: str = "turbo", language: str | None = None, beam_size: int = 5
+        self, file_path: str, model_size: str = "turbo", language: Optional[str] = None, beam_size: int = 5
     ) -> TranscribeResponse:
         """
         Transcribe a video file and return structured results.
@@ -161,8 +162,8 @@ class TranscriptionService:
         return TranscribeResponse(metadata=metadata, segments=transcription_segments, output_files=output_files)
 
     def _save_outputs(
-        self, video_path: Path, metadata: TranscriptionMetadata, segments: list[TranscriptionSegment]
-    ) -> dict[str, str]:
+        self, video_path: Path, metadata: TranscriptionMetadata, segments: list
+    ) -> dict:
         """
         Save transcription outputs in JSON and plain text formats.
 

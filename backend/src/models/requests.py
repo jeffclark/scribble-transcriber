@@ -1,6 +1,7 @@
 """Pydantic request models for type-safe API validation."""
 
 from pathlib import Path
+from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -9,7 +10,7 @@ class TranscribeRequest(BaseModel):
 
     file_path: str = Field(..., description="Absolute path to video file")
     model_size: str = Field("turbo", description="Whisper model size")
-    language: str | None = Field(None, description="Override language detection")
+    language: Optional[str] = Field(None, description="Override language detection")
     beam_size: int = Field(5, ge=1, le=10, description="Beam size for decoding")
 
     @field_validator("file_path")
