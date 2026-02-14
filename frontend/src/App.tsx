@@ -4,11 +4,27 @@
  */
 
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import FileUpload from "./components/FileUpload";
 import FileQueue from "./components/FileQueue";
 import { usePersistedQueue } from "./hooks/usePersistedQueue";
-import { initializeApi, transcribeVideo } from "./api/transcription";
+import { initializeApi, setAuthToken as setApiAuthToken } from "./api/transcription";
+import { transcribeWithProgress } from "./hooks/useTranscriptionProgress";
 import type { QueuedFile } from "./types/transcription";
+
+/**
+ * Validates folder path for security
+ * Checks for shell metacharacters, directory traversal, and null bytes
+ */
+const validatePath = (path: string): boolean => {
+  if (!path?.trim()) return false;
+
+  const dangerous = /[;&|`$()]/;  // Shell metacharacters
+  const traversal = /\.\./;        // Directory traversal
+  const nullByte = /\x00/;         // Null bytes
+
+  return !(dangerous.test(path) || traversal.test(path) || nullByte.test(path));
+};
 
 function App() {
   const {
@@ -20,44 +36,54 @@ function App() {
     setAuthToken,
     setCurrentlyProcessing,
     clearCompleted,
+    clearAll,
   } = usePersistedQueue();
 
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize API connection on mount
+  // Initialize API connection on mount with retry logic
   useEffect(() => {
     const initialize = async () => {
       console.log("🔄 Starting API initialization...");
       setIsInitializing(true);
       setError(null);
 
-      try {
-        const result = await initializeApi();
-        console.log("📡 API result:", result);
+      let attempts = 0;
+      const maxAttempts = 10;
 
-        if (result.connected && result.token) {
-          console.log("✅ Setting backend connected to true");
-          setBackendConnected(true);
-          setAuthToken(result.token);
-          console.log("✅ Backend connected:", result.health);
-        } else {
-          console.log("❌ Backend not connected:", result);
-          setBackendConnected(false);
-          setError("Failed to connect to backend. Make sure the Python server is running.");
+      while (attempts < maxAttempts) {
+        try {
+          const result = await initializeApi();
+          console.log(`📡 API result (attempt ${attempts + 1}/${maxAttempts}):`, result);
+
+          if (result.connected && result.token) {
+            console.log("✅ Setting backend connected to true");
+            setBackendConnected(true);
+            setAuthToken(result.token);
+            setApiAuthToken(result.token); // Also set in API module
+            console.log("✅ Backend connected:", result.health);
+            setError(null); // Clear any previous errors
+            setIsInitializing(false);
+            return; // Success! Exit the retry loop
+          }
+        } catch (err) {
+          console.log(`❌ Attempt ${attempts + 1}/${maxAttempts} failed:`, err);
         }
-      } catch (err) {
-        console.log("❌ Initialization error:", err);
-        setBackendConnected(false);
-        setError(`Backend initialization failed: ${err}`);
-        console.error("Initialization error:", err);
-      } finally {
-        setIsInitializing(false);
-        console.log("🏁 Initialization complete. State:", {
-          backendConnected: state.backendConnected,
-          isInitializing: false
-        });
+
+        attempts++;
+
+        if (attempts < maxAttempts) {
+          console.log(`⏳ Waiting 1 second before retry ${attempts + 1}/${maxAttempts}...`);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        }
       }
+
+      // Failed after all retries
+      console.log("❌ Backend not connected after all retries");
+      setBackendConnected(false);
+      setError("Failed to connect to backend after 10 seconds. Please restart the app.");
+      setIsInitializing(false);
     };
 
     initialize();
@@ -78,13 +104,33 @@ function App() {
     files.forEach((file) => addFile(file));
   };
 
-  // Open file in folder (Tauri API)
-  const handleOpenFolder = async (filePath: string) => {
+  // Open folder in native file explorer (Custom Tauri Command)
+  const handleOpenFolder = async (folderPath: string) => {
     try {
-      // TODO: Implement with Tauri shell API
-      alert(`Would open folder for: ${filePath}`);
+      // Client-side validation (defense in depth)
+      if (!validatePath(folderPath)) {
+        console.error("Invalid folder path format");
+        alert("Invalid folder path");
+        return;
+      }
+
+      // Call our custom Rust command (with server-side validation)
+      await invoke('open_folder', { path: folderPath });
     } catch (err) {
-      console.error("Failed to open folder:", err);
+      // Type-safe error handling
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error("Failed to open folder:", errorMessage);
+
+      // User-friendly error messages based on error type
+      if (errorMessage.includes("does not exist")) {
+        alert("The folder was not found. It may have been moved or deleted.");
+      } else if (errorMessage.includes("not a directory")) {
+        alert("The path is not a valid folder.");
+      } else if (errorMessage.includes("Invalid path")) {
+        alert("The folder path is invalid.");
+      } else {
+        alert("Could not open folder. Please try again.");
+      }
     }
   };
 
@@ -98,27 +144,63 @@ function App() {
       return;
     }
 
+    // Ensure API module has the auth token
+    if (!state.authToken) {
+      console.error("No auth token available");
+      return;
+    }
+
     // Process files sequentially
     for (const file of pendingFiles) {
       try {
-        // Update status to processing
-        updateFile(file.id, { status: "processing", progress: 0 } as QueuedFile);
+        // Update status to processing with 0% progress
+        updateFile(file.id, {
+          status: "processing",
+          progress: 0,
+          progressMessage: "Starting transcription..."
+        } as QueuedFile);
         setCurrentlyProcessing(file.id);
 
-        // Call transcription API
-        const response = await transcribeVideo({
-          file_path: file.path,
-          model_size: "turbo",
-          beam_size: 5,
+        console.log(`🎬 Starting transcription: ${file.name}`);
+
+        // Use SSE for real-time progress updates
+        await transcribeWithProgress({
+          filePath: file.path,
+          modelSize: "base",  // Changed from "turbo" to "base" for faster CPU processing
+          beamSize: 5,
+          authToken: state.authToken,
+
+          // onProgress callback - update progress bar
+          onProgress: (progress, message, segmentCount, estimatedTotal) => {
+            console.log(`[${file.name}] ${progress}% - ${message}${segmentCount ? ` (${segmentCount} segments)` : ''}`);
+            updateFile(file.id, {
+              status: "processing",
+              progress,
+              progressMessage: message,
+              segmentCount: segmentCount,
+              estimatedTotalSegments: estimatedTotal
+            } as QueuedFile);
+          },
+
+          // onComplete callback - mark as completed
+          onComplete: (result) => {
+            console.log(`✅ Transcription complete: ${file.name}`);
+            updateFile(file.id, {
+              status: "completed",
+              outputs: result.output_files,
+            } as QueuedFile);
+          },
+
+          // onError callback - mark as failed
+          onError: (error) => {
+            console.error(`❌ Transcription failed for ${file.name}:`, error);
+            updateFile(file.id, {
+              status: "failed",
+              error,
+            } as QueuedFile);
+          }
         });
 
-        // Update to completed with outputs
-        updateFile(file.id, {
-          status: "completed",
-          outputs: response.output_files,
-        } as QueuedFile);
-
-        console.log(`✅ Transcription complete: ${file.name}`);
       } catch (err) {
         // Update to failed with error
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -232,6 +314,16 @@ function App() {
                     className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                   >
                     Clear Completed
+                  </button>
+                )}
+
+                {filesArray.length > 0 && (
+                  <button
+                    onClick={clearAll}
+                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                    title="Remove all files from queue"
+                  >
+                    Clear All
                   </button>
                 )}
               </div>

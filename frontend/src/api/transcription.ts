@@ -1,16 +1,14 @@
 /**
  * API client for backend transcription service
- * Handles all HTTP communication with Python FastAPI backend
+ * Uses Tauri commands (IPC) to communicate with Python FastAPI backend
  */
 
+import { invoke } from "@tauri-apps/api/core";
 import type {
   TranscribeRequest,
   TranscribeResponse,
   HealthResponse,
-  TokenResponse,
 } from "../types/transcription";
-
-const API_BASE_URL = "http://localhost:8765";
 
 // Stored auth token
 let authToken: string | null = null;
@@ -33,28 +31,35 @@ export function getAuthToken(): string | null {
  * Fetch authentication token from backend
  */
 export async function fetchAuthToken(): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/token`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch token: ${response.statusText}`);
+  try {
+    console.log("🔑 Fetching auth token via Tauri command");
+    const token = await invoke<string>("fetch_auth_token");
+    authToken = token;
+    console.log(`✅ Auth token received: ${token.substring(0, 12)}...`);
+    return token;
+  } catch (error) {
+    console.error("❌ Failed to fetch auth token:", error);
+    throw new Error(`Cannot fetch auth token. Backend may not be running: ${error}`);
   }
-
-  const data: TokenResponse = await response.json();
-  authToken = data.token;
-  return data.token;
 }
 
 /**
  * Check backend health status
  */
 export async function checkHealth(): Promise<HealthResponse> {
-  const response = await fetch(`${API_BASE_URL}/health`);
-
-  if (!response.ok) {
-    throw new Error(`Health check failed: ${response.statusText}`);
+  try {
+    console.log("🔍 Checking backend health via Tauri command");
+    console.log("Invoking command: check_health");
+    const data = await invoke<HealthResponse>("check_health");
+    console.log("✅ Backend health check successful:", data);
+    return data;
+  } catch (error) {
+    console.error("❌ Backend health check failed:");
+    console.error("Error type:", typeof error);
+    console.error("Error:", error);
+    console.error("Error string:", String(error));
+    throw new Error(`Cannot connect to backend: ${JSON.stringify(error)}`);
   }
-
-  return response.json();
 }
 
 /**
@@ -67,22 +72,29 @@ export async function transcribeVideo(
     throw new Error("Authentication token not set. Call fetchAuthToken() first.");
   }
 
-  const response = await fetch(`${API_BASE_URL}/transcribe`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Auth-Token": authToken,
-    },
-    body: JSON.stringify(request),
-  });
+  try {
+    return await invoke<TranscribeResponse>("transcribe_video", {
+      filePath: request.file_path,
+      modelSize: request.model_size || "turbo",
+      language: request.language || null,
+      authToken: authToken,
+    });
+  } catch (error) {
+    // If unauthorized, refresh token and retry once
+    if (error && typeof error === "string" && error.includes("401")) {
+      console.log("Token expired, refreshing...");
+      await fetchAuthToken();
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const errorMessage = errorData.detail || response.statusText;
-    throw new Error(`Transcription failed: ${errorMessage}`);
+      return await invoke<TranscribeResponse>("transcribe_video", {
+        filePath: request.file_path,
+        modelSize: request.model_size || "turbo",
+        language: request.language || null,
+        authToken: authToken,
+      });
+    }
+
+    throw new Error(`Transcription failed: ${error}`);
   }
-
-  return response.json();
 }
 
 /**
@@ -105,13 +117,18 @@ export async function initializeApi(): Promise<{
   connected: boolean;
   token: string | null;
   health: HealthResponse | null;
+  error?: string;
 }> {
   try {
+    console.log("🚀 Initializing API connection via Tauri commands");
+
     // Test connection
     const health = await checkHealth();
+    console.log(`✅ Health check passed. Backend version: ${health.version}, Device: ${health.device}`);
 
     // Fetch auth token
     const token = await fetchAuthToken();
+    console.log("✅ Authentication token acquired");
 
     return {
       connected: true,
@@ -119,11 +136,15 @@ export async function initializeApi(): Promise<{
       health,
     };
   } catch (error) {
-    console.error("API initialization failed:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("❌ API initialization failed:", errorMessage);
+    console.error("Full error:", error);
+
     return {
       connected: false,
       token: null,
       health: null,
+      error: errorMessage,
     };
   }
 }

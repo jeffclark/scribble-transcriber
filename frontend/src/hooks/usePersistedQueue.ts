@@ -71,8 +71,7 @@ export function usePersistedQueue() {
    * Add file to queue
    */
   const addFile = (file: QueuedFile) => {
-    if (!isMountedRef.current) return;
-
+    // Note: No mount check here - setState is safe even after unmount
     setState((prev) => {
       const newQueue = new Map(prev.queue);
       newQueue.set(file.id, file);
@@ -84,8 +83,7 @@ export function usePersistedQueue() {
    * Remove file from queue
    */
   const removeFile = (id: string) => {
-    if (!isMountedRef.current) return;
-
+    // Note: No mount check here - setState is safe even after unmount
     setState((prev) => {
       const newQueue = new Map(prev.queue);
       newQueue.delete(id);
@@ -97,8 +95,7 @@ export function usePersistedQueue() {
    * Update file in queue (immutable update)
    */
   const updateFile = (id: string, updates: Partial<QueuedFile>) => {
-    if (!isMountedRef.current) return;
-
+    // Note: No mount check here - setState is safe even after unmount
     setState((prev) => {
       const file = prev.queue.get(id);
       if (!file) return prev;
@@ -131,8 +128,7 @@ export function usePersistedQueue() {
    * Set currently processing file
    */
   const setCurrentlyProcessing = (id: string | null) => {
-    if (!isMountedRef.current) return;
-
+    // Note: No mount check here - setState is safe even after unmount
     setState((prev) => ({ ...prev, currentlyProcessing: id }));
   };
 
@@ -140,8 +136,7 @@ export function usePersistedQueue() {
    * Clear completed and failed files
    */
   const clearCompleted = () => {
-    if (!isMountedRef.current) return;
-
+    // Note: No mount check here - setState is safe even after unmount
     setState((prev) => {
       const newQueue = new Map(prev.queue);
       for (const [id, file] of newQueue.entries()) {
@@ -153,6 +148,19 @@ export function usePersistedQueue() {
     });
   };
 
+  /**
+   * Clear all files from queue (including processing)
+   * Completely resets the queue state
+   */
+  const clearAll = () => {
+    // Note: No mount check here - setState is safe even after unmount
+    setState((prev) => ({
+      ...prev,
+      queue: new Map(),
+      currentlyProcessing: null,
+    }));
+  };
+
   return {
     state,
     addFile,
@@ -162,6 +170,7 @@ export function usePersistedQueue() {
     setAuthToken,
     setCurrentlyProcessing,
     clearCompleted,
+    clearAll,
     isMounted: isMountedRef,
   };
 }

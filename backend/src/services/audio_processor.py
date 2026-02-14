@@ -3,6 +3,7 @@
 import logging
 import os
 import subprocess
+import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -10,6 +11,36 @@ from pathlib import Path
 import ffmpeg
 
 logger = logging.getLogger(__name__)
+
+
+def get_ffmpeg_path() -> str:
+    """
+    Get path to ffmpeg binary (bundled or system).
+
+    When running as PyInstaller bundle, use the bundled ffmpeg.
+    Otherwise, use system ffmpeg from PATH.
+
+    Returns:
+        str: Path to ffmpeg executable
+    """
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller bundle
+        # FFmpeg is in same directory as the executable
+        bundle_dir = os.path.dirname(sys.executable)
+        ffmpeg_path = os.path.join(bundle_dir, "ffmpeg")
+
+        if os.path.exists(ffmpeg_path):
+            logger.info(f"Using bundled ffmpeg: {ffmpeg_path}")
+            return ffmpeg_path
+        else:
+            logger.warning(f"Bundled ffmpeg not found at {ffmpeg_path}, falling back to system ffmpeg")
+
+    # Fallback to system ffmpeg
+    return "ffmpeg"
+
+
+# Configure ffmpeg-python to use the correct executable
+ffmpeg._ffmpeg_cmd = get_ffmpeg_path()
 
 
 class AudioExtractionError(Exception):
@@ -113,8 +144,8 @@ def extract_audio(video_path: Path, timeout: int = 300) -> bytes:
             )
             stream = ffmpeg.overwrite_output(stream)
 
-            # Run with timeout and capture output
-            ffmpeg.run(stream, capture_stdout=True, capture_stderr=True, timeout=timeout)
+            # Run and capture output
+            ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
 
             logger.info(f"Audio extracted successfully: {audio_path.stat().st_size} bytes")
 

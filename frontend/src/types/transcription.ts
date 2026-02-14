@@ -19,6 +19,9 @@ export type QueuedFile =
       path: string;
       size: number;
       progress: number;
+      progressMessage?: string;  // Optional stage message
+      segmentCount?: number;  // Number of segments processed so far
+      estimatedTotalSegments?: number;  // Estimated total segments
     }
   | {
       status: "completed";

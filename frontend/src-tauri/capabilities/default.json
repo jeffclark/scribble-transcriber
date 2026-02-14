@@ -4,6 +4,10 @@
   "description": "Default permissions for the application",
   "windows": ["main"],
   "permissions": [
-    "dialog:default"
+    "dialog:default",
+    "shell:default",
+    "core:default",
+    "core:path:default",
+    "http:default"
   ]
 }

@@ -112,13 +112,35 @@ export default function FileQueue({ files, onRemove, onOpenFolder }: FileQueuePr
             {/* Progress Bar */}
             {file.status === "processing" && (
               <div className="mt-2">
+                {/* Progress percentage and segment count */}
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="font-medium text-blue-600">{file.progress}%</span>
+                  <span className="text-gray-500">
+                    {file.progressMessage || "Processing..."}
+                    {file.segmentCount && file.estimatedTotalSegments &&
+                      ` • ${file.segmentCount} / ~${file.estimatedTotalSegments} segments`}
+                    {file.segmentCount && !file.estimatedTotalSegments &&
+                      ` • ${file.segmentCount} segments`}
+                  </span>
+                </div>
+
+                {/* Progress bar */}
                 <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-blue-500 transition-all duration-300"
+                    className="h-full bg-blue-500 transition-all duration-300 ease-out"
                     style={{ width: `${file.progress}%` }}
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{file.progress}% complete</p>
+
+                {/* Stage message with timestamp */}
+                {file.progressMessage && (
+                  <div className="flex justify-between items-center mt-1">
+                    <p className="text-xs text-gray-500">{file.progressMessage}</p>
+                    <p className="text-xs text-gray-400">
+                      {new Date().toLocaleTimeString()}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -149,9 +171,21 @@ export default function FileQueue({ files, onRemove, onOpenFolder }: FileQueuePr
 
             {file.status === "completed" && (
               <button
-                onClick={() => onOpenFolder(file.path)}
+                onClick={() => {
+                  // Extract directory from first output file path
+                  const outputPath = file.outputs?.json || file.outputs?.txt;
+                  if (outputPath) {
+                    // Get directory containing the output files
+                    const directory = outputPath.substring(0, outputPath.lastIndexOf('/'));
+                    onOpenFolder(directory);
+                  } else {
+                    // Fallback: use video file directory (outputs should be there)
+                    const videoDir = file.path.substring(0, file.path.lastIndexOf('/'));
+                    onOpenFolder(videoDir);
+                  }
+                }}
                 className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded"
-                title="Open in folder"
+                title="Open folder containing transcription files"
               >
                 Open Folder
               </button>
