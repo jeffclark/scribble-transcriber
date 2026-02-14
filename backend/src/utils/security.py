@@ -23,6 +23,19 @@ def generate_auth_token() -> str:
     return _AUTH_TOKEN
 
 
+def set_auth_token(token: str) -> None:
+    """
+    Set the authentication token (for sidecar mode).
+
+    This is used when the token is provided by Tauri via AUTH_TOKEN environment variable.
+
+    Args:
+        token: The authentication token to set
+    """
+    global _AUTH_TOKEN
+    _AUTH_TOKEN = token
+
+
 def get_auth_token() -> str:
     """
     Get the current authentication token.
@@ -60,3 +73,16 @@ def verify_token(x_auth_token: str = Header(..., description="Authentication tok
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
 
     return x_auth_token
+
+
+def verify_token_value(token: str) -> bool:
+    """
+    Verify token value directly (for query params).
+
+    Args:
+        token: Token to verify
+
+    Returns:
+        bool: True if token is valid, False otherwise
+    """
+    return _AUTH_TOKEN is not None and token == _AUTH_TOKEN

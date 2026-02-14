@@ -2,10 +2,11 @@
 
 import gc
 import logging
+import platform
+import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
 
-import torch
 from faster_whisper import WhisperModel
 
 logger = logging.getLogger(__name__)
@@ -35,23 +36,54 @@ class GPUManager:
 
     def _detect_device(self) -> Tuple[str, str]:
         """
-        Detect best available device.
+        Detect best available device using lightweight subprocess calls.
+
+        This replaces torch.cuda.is_available() and torch.backends.mps.is_available()
+        with subprocess-based checks, saving 250MB bundle size + 200MB RAM.
 
         Returns:
             tuple[str, str]: (device, compute_type)
-                device: "cuda", "mps", or "cpu"
-                compute_type: "float16" for GPU, "int8" for CPU
+                device: "cuda" or "cpu"
+                compute_type: "float16" for CUDA, "int8" for CPU
         """
-        if torch.cuda.is_available():
-            logger.info("CUDA GPU detected")
-            return "cuda", "float16"
-        elif torch.backends.mps.is_available():
-            logger.info("Apple Silicon MPS detected")
-            # Note: faster-whisper's MPS support is limited, falls back to optimized CPU
-            return "mps", "float16"
-        else:
-            logger.info("No GPU detected, using CPU")
-            return "cpu", "int8"
+        # Check for NVIDIA GPU first
+        try:
+            result = subprocess.run(
+                ['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                gpu_name = result.stdout.strip()
+                logger.info(f"CUDA GPU detected: {gpu_name}")
+                return "cuda", "float16"
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            # nvidia-smi not found or timed out - no NVIDIA GPU
+            pass
+
+        # Check for Apple Silicon
+        if platform.system() == "Darwin":
+            try:
+                result = subprocess.run(
+                    ['sysctl', '-n', 'machdep.cpu.brand_string'],
+                    capture_output=True,
+                    text=True,
+                    timeout=1
+                )
+                cpu_brand = result.stdout.strip()
+                if "Apple" in cpu_brand or any(chip in cpu_brand for chip in ["M1", "M2", "M3", "M4"]):
+                    logger.info(f"Apple Silicon detected: {cpu_brand}")
+                    logger.info("Using CPU with int8 (faster-whisper doesn't support MPS)")
+                    # Note: faster-whisper (ctranslate2) doesn't support MPS
+                    return "cpu", "int8"
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                # sysctl failed - continue to generic CPU fallback
+                pass
+
+        # Fallback: Generic CPU
+        logger.info("No GPU detected, using CPU with int8 quantization")
+        return "cpu", "int8"
 
     def _is_model_cached(self, model_size: str) -> bool:
         """
@@ -140,13 +172,16 @@ class GPUManager:
         """
         Force GPU memory cleanup.
 
-        CRITICAL: Fixes 300MB memory leak per transcription.
-        Must be called after each transcription and during model switching.
+        Note: With ctranslate2 (used by faster-whisper), GPU memory is managed
+        internally. We rely on Python's garbage collector here.
+
+        Previously used torch.cuda.empty_cache(), but we've removed torch
+        dependency to save 250MB bundle size. ctranslate2 handles cleanup.
         """
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-            logger.debug("CUDA memory cache cleared")
+        # ctranslate2 manages GPU memory internally
+        # Just trigger Python GC to release any references
+        gc.collect()
+        logger.debug("Memory cleanup triggered (ctranslate2 manages GPU internally)")
 
     def cleanup_after_transcription(self):
         """

@@ -18,7 +18,8 @@ async def test_gpu_manager_initialization():
 
     # After initialization
     device_info = manager.get_device_info()
-    assert device_info["device"] in ["cuda", "mps", "cpu"]
+    # Note: We no longer return "mps" - Apple Silicon uses "cpu" with int8
+    assert device_info["device"] in ["cuda", "cpu"]
     assert device_info["compute_type"] in ["float16", "int8"]
     assert device_info["model_size"] == "not loaded"
 
