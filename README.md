@@ -1,31 +1,104 @@
-# Video Transcriber
+# Scribble - Video Transcriber
 
-Cross-platform desktop application for batch video transcription using local Whisper models with GPU acceleration.
+Desktop application for batch video transcription using local Whisper models. All transcription happens on your Mac - no cloud services, no data sent anywhere.
+
+## Download and Install
+
+**Latest Release:** [Scribble v0.1.0 for macOS (Apple Silicon)](frontend/src-tauri/target/release/bundle/dmg/Video%20Transcriber_0.1.0_aarch64.dmg)
+
+See [INSTALL.md](INSTALL.md) for detailed installation instructions.
+
+## Requirements
+
+- **macOS 11.0 (Big Sur) or later**
+- **Apple Silicon (M1/M2/M3/M4) ONLY** - Intel Macs not supported
+- **2GB free disk space** (for Whisper models)
+
+## Known Limitations (v0.1.0)
+
+- **Apple Silicon Only**: This release is built for M1/M2/M3/M4 Macs only. Intel Macs are not supported due to architecture constraints.
+- **Orphan Processes**: When quitting with Cmd+Q, backend processes may not terminate immediately. If the app won't connect after relaunching, manually quit `scribble-backend` processes in Activity Monitor or run `killall scribble-backend` in Terminal.
+- **First Launch Slow**: The first transcription takes 30-60 seconds longer as Whisper models are downloaded.
+- **CPU-Only Transcription**: macOS builds use CPU mode (MPS support coming in future release).
+
+## Features
+
+- ✅ **Fully local transcription** - No internet required after initial setup
+- ✅ **Multiple Whisper models** - Turbo, Base, Small, Medium, Large-v3
+- ✅ **Batch processing** - Queue multiple videos
+- ✅ **Real-time progress** - See transcription progress per video
+- ✅ **Multiple output formats** - JSON (with timestamps) and plain text
+- ✅ **Auto-start backend** - No terminal commands needed
+- ✅ **Clean shutdown** - Backend terminates when app quits
 
 ## Project Status
 
-🚧 **Phase 1 (Backend MVP) - COMPLETE**
+✅ **v0.1.0 - macOS Distribution Ready**
 
-Core transcription service with GPU acceleration is implemented and tested.
+All phases complete. The app is packaged and ready for distribution.
 
-### Completed Features
+## Building from Source
 
-- ✅ Python FastAPI backend with faster-whisper
-- ✅ GPU detection (CUDA, MPS, CPU fallback)
-- ✅ Secure authentication and path validation
-- ✅ Audio extraction with FFmpeg
-- ✅ JSON and plain text output formats
-- ✅ GPU memory leak fix (300MB per file)
-- ✅ Comprehensive test suite
+For developers who want to build from source or contribute to the project.
 
-### Next Steps
+### Prerequisites
 
-- Phase 2: Tauri desktop shell (React/TypeScript frontend)
-- Phase 3: Batch processing with queue management
-- Phase 4: GPU optimization and fallback refinement
-- Phase 5: Polish and distribution (DMG/MSI installers)
+- macOS with Apple Silicon (M1/M2/M3/M4)
+- Xcode Command Line Tools: `xcode-select --install`
+- Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- Node.js 18+: `brew install node`
+- Python 3.11+: `brew install python@3.11`
+- FFmpeg: `brew install ffmpeg`
 
-## Quick Start (Backend Only)
+### Build Steps
+
+1. **Clone repository:**
+```bash
+git clone https://github.com/yourusername/video-transcriber.git
+cd video-transcriber
+```
+
+2. **Build backend binary:**
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install pyinstaller
+
+# Build PyInstaller bundle
+pyinstaller --clean backend.spec
+
+# Copy to Tauri binaries directory
+cp dist/scribble-backend/scribble-backend ../frontend/src-tauri/binaries/scribble-backend-aarch64-apple-darwin
+chmod +x ../frontend/src-tauri/binaries/scribble-backend-aarch64-apple-darwin
+```
+
+3. **Download FFmpeg binary:**
+```bash
+cd ../frontend/src-tauri/binaries
+curl -L https://evermeet.cx/ffmpeg/getrelease/arm64/ffmpeg/zip -o ffmpeg.zip
+unzip ffmpeg.zip
+mv ffmpeg ffmpeg-aarch64-apple-darwin
+chmod +x ffmpeg-aarch64-apple-darwin
+rm ffmpeg.zip
+```
+
+4. **Build Tauri app:**
+```bash
+cd ../../
+npm install
+npm run tauri build
+```
+
+5. **Output:**
+```
+frontend/src-tauri/target/release/bundle/
+├── dmg/Video Transcriber_0.1.0_aarch64.dmg
+└── macos/Video Transcriber.app
+```
+
+## Development (Backend Only)
 
 ### Prerequisites
 

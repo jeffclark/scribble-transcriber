@@ -11,6 +11,18 @@ mod commands;
 // State to track the backend process
 struct BackendProcess(Mutex<Option<Child>>);
 
+impl Drop for BackendProcess {
+    fn drop(&mut self) {
+        println!("🔴 BackendProcess Drop called - terminating backend");
+        if let Ok(mut guard) = self.0.lock() {
+            if let Some(mut child) = guard.take() {
+                let _ = child.kill();
+                println!("✅ Backend terminated in Drop");
+            }
+        }
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -43,11 +55,24 @@ fn main() {
                 panic!("Backend binary not found at {:?}", backend_binary);
             }
 
-            let child = Command::new(&backend_binary)
+            // On Unix, create a new process group so we can kill all children
+            #[cfg(unix)]
+            use std::os::unix::process::CommandExt;
+
+            #[cfg(unix)]
+            let mut cmd = Command::new(&backend_binary);
+            #[cfg(unix)]
+            let cmd = cmd
                 .arg("--port")
                 .arg("8765")
-                .spawn()
-                .expect("Failed to start backend");
+                .process_group(0); // Create new process group
+
+            #[cfg(not(unix))]
+            let cmd = Command::new(&backend_binary)
+                .arg("--port")
+                .arg("8765");
+
+            let child = cmd.spawn().expect("Failed to start backend");
 
             // Store the process handle
             *backend_process.0.lock().unwrap() = Some(child);
@@ -78,21 +103,19 @@ fn main() {
             println!("\n⚠️ Backend started but not responding after 10 seconds");
             Ok(())
         })
-        .on_window_event(|window, event| {
-            // Kill backend when window is closed
-            if let tauri::WindowEvent::Destroyed = event {
-                let app_handle = window.app_handle();
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                // Kill backend when app is exiting
+                println!("App exit requested, terminating backend...");
                 let backend_process = app_handle.state::<BackendProcess>();
-
-                // Properly scope the mutex guard
                 let mut guard = backend_process.0.lock().unwrap();
                 if let Some(mut child) = guard.take() {
                     let _ = child.kill();
-                    println!("Backend process terminated");
+                    println!("✅ Backend process terminated");
                 }
-                drop(guard); // Explicitly drop the guard
+                drop(guard);
             }
-        })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        });
 }
