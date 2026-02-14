@@ -19,6 +19,19 @@ hidden_imports = [
     'pydantic',
     'pydantic_core',
     'starlette',
+    # Application modules
+    'src',
+    'src.main',
+    'src.models',
+    'src.models.requests',
+    'src.models.responses',
+    'src.services',
+    'src.services.transcription',
+    'src.services.gpu_manager',
+    'src.services.audio_processor',
+    'src.utils',
+    'src.utils.security',
+    'src.utils.validation',
 ]
 
 # Add faster-whisper and its dependencies
@@ -31,8 +44,11 @@ hidden_imports += collect_submodules('faster_whisper')
 datas = []
 datas += collect_data_files('faster_whisper')
 
+# Include the entire src directory as data
+datas += [('src', 'src')]
+
 a = Analysis(
-    ['src/main.py'],
+    ['backend_main.py'],
     pathex=[],
     binaries=[],
     datas=datas,
@@ -63,28 +79,20 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='scribble-backend',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
+    upx_exclude=[],
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch='arm64',  # Will be overridden by --target-arch flag
+    target_arch='arm64',  # Will be set by build script
     codesign_identity=None,
     entitlements_file=None,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='scribble-backend',
 )
