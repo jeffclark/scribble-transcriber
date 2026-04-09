@@ -13,13 +13,7 @@ cleanup() {
     echo ""
     echo "🛑 Shutting down application..."
 
-    # Stop backend
-    if [ -n "$BACKEND_PID" ]; then
-        echo "⏳ Stopping backend server..."
-        "$SCRIPT_DIR/stop-server.sh"
-    fi
-
-    # Stop frontend (Tauri)
+    # Stop frontend (Tauri manages the backend sidecar lifecycle)
     if [ -n "$FRONTEND_PID" ]; then
         echo "⏳ Stopping Mac app..."
         kill -TERM $FRONTEND_PID 2>/dev/null || true
@@ -46,26 +40,7 @@ if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
     cd "$PROJECT_ROOT"
 fi
 
-# Step 1: Start backend server
-echo "📡 Starting backend server..."
-"$SCRIPT_DIR/start-server.sh"
-
-if [ $? -ne 0 ]; then
-    echo "❌ Failed to start backend server"
-    exit 1
-fi
-
-# Mark that backend is running (for cleanup)
-BACKEND_PID=1
-
-echo ""
-echo "✅ Backend server is running"
-echo ""
-
-# Wait a moment for backend to stabilize
-sleep 2
-
-# Step 2: Start frontend (Tauri Mac app)
+# Start frontend (Tauri Mac app) — Tauri manages the backend sidecar internally
 echo "🖥️  Starting Mac application..."
 echo "   (This will open a window in a few seconds...)"
 echo ""

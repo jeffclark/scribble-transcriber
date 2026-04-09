@@ -53,3 +53,8 @@ htmlcov/
 *.tmp
 *.log
 temp_audio/
+
+# Server management
+.server.pid
+server.log
+server.log.old

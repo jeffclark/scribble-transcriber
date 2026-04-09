@@ -63,3 +63,9 @@ dist/
 *.dmg
 *.msi
 *.exe
+
+# Rust/Tauri build artifacts
+frontend/src-tauri/target/
+
+# Claude Code worktrees
+.claude/worktrees/

@@ -229,7 +229,10 @@ function App() {
       <header className="bg-white shadow-sm">
         <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">Video Transcriber</h1>
+            <div className="flex items-center gap-3">
+              <img src="/icon.png" alt="Scribble" className="w-8 h-8" />
+              <h1 className="text-2xl font-bold text-gray-900">Scribble</h1>
+            </div>
 
             {/* Connection Status */}
             <div className="flex items-center gap-3">
