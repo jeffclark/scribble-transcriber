@@ -48,6 +48,12 @@ fn main() {
             // Tauri strips the architecture suffix from external binaries
             let backend_binary = exe_dir.join("scribble-backend");
 
+            // Kill any orphaned backend on port 8765 before starting fresh
+            let _ = std::process::Command::new("sh")
+                .arg("-c")
+                .arg("lsof -ti :8765 | xargs kill -9 2>/dev/null || true")
+                .output();
+
             // Start the backend process
             println!("Starting backend at: {:?}", backend_binary);
 
@@ -107,15 +113,20 @@ fn main() {
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
-                // Kill backend when app is exiting
                 println!("App exit requested, terminating backend...");
+                // Kill any process on port 8765 (catches the backend + all child processes)
+                let _ = std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg("lsof -ti :8765 | xargs kill -9 2>/dev/null || true")
+                    .output();
+                // Also kill via stored handle as a fallback
                 let backend_process = app_handle.state::<BackendProcess>();
                 let mut guard = backend_process.0.lock().unwrap();
                 if let Some(mut child) = guard.take() {
                     let _ = child.kill();
-                    println!("✅ Backend process terminated");
                 }
                 drop(guard);
+                println!("✅ Backend terminated");
             }
         });
 }

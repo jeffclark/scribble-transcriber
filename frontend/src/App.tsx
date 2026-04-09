@@ -42,53 +42,41 @@ function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize API connection on mount with retry logic
+  // Initialize API connection on mount, retrying until connected
   useEffect(() => {
+    let cancelled = false;
+
     const initialize = async () => {
-      console.log("🔄 Starting API initialization...");
       setIsInitializing(true);
       setError(null);
 
-      let attempts = 0;
-      const maxAttempts = 10;
-
-      while (attempts < maxAttempts) {
+      while (!cancelled) {
         try {
           const result = await initializeApi();
-          console.log(`📡 API result (attempt ${attempts + 1}/${maxAttempts}):`, result);
-
           if (result.connected && result.token) {
-            console.log("✅ Setting backend connected to true");
-            setBackendConnected(true);
-            setAuthToken(result.token);
-            setApiAuthToken(result.token); // Also set in API module
-            console.log("✅ Backend connected:", result.health);
-            setError(null); // Clear any previous errors
-            setIsInitializing(false);
-            return; // Success! Exit the retry loop
+            if (!cancelled) {
+              setBackendConnected(true);
+              setAuthToken(result.token);
+              setApiAuthToken(result.token);
+              setError(null);
+              setIsInitializing(false);
+            }
+            return;
           }
         } catch (err) {
-          console.log(`❌ Attempt ${attempts + 1}/${maxAttempts} failed:`, err);
+          console.log("Connection attempt failed, retrying...", err);
         }
 
-        attempts++;
-
-        if (attempts < maxAttempts) {
-          console.log(`⏳ Waiting 1 second before retry ${attempts + 1}/${maxAttempts}...`);
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        if (!cancelled) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
       }
-
-      // Failed after all retries
-      console.log("❌ Backend not connected after all retries");
-      setBackendConnected(false);
-      setError("Failed to connect to backend after 10 seconds. Please restart the app.");
-      setIsInitializing(false);
     };
 
     initialize();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+  }, []);
 
   // Debug: Log state changes
   useEffect(() => {
@@ -260,9 +248,6 @@ function App() {
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-800">{error}</p>
-            <p className="text-sm text-red-600 mt-2">
-              Start the backend: <code className="bg-red-100 px-2 py-1 rounded">cd backend && ./scripts/dev.sh</code>
-            </p>
           </div>
         )}
 
