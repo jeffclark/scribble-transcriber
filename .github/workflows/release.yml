@@ -42,7 +42,7 @@ jobs:
         run: |
           pyinstaller --clean backend.spec
           mkdir -p ../frontend/src-tauri/binaries
-          cp dist/scribble-backend/scribble-backend \
+          cp dist/scribble-backend \
              ../frontend/src-tauri/binaries/scribble-backend-aarch64-apple-darwin
           chmod +x ../frontend/src-tauri/binaries/scribble-backend-aarch64-apple-darwin
 
