@@ -4,9 +4,11 @@ Desktop application for batch video transcription using local Whisper models. Al
 
 ## Download and Install
 
-**Latest Release:** [Scribble v0.1.0 for macOS (Apple Silicon)](frontend/src-tauri/target/release/bundle/dmg/Video%20Transcriber_0.1.0_aarch64.dmg)
+**Latest Release:** [Download the latest `.dmg` from GitHub Releases](../../releases/latest)
 
-See [INSTALL.md](INSTALL.md) for detailed installation instructions.
+Scribble is not signed with an Apple Developer ID, so macOS Gatekeeper blocks it on first launch. The workaround is one-time per Mac. See [docs/INSTALL_UNSIGNED.md](docs/INSTALL_UNSIGNED.md) for step-by-step instructions (macOS 14 and macOS 15 are different).
+
+> **Note on distribution:** Scribble is distributed as a free unsigned DMG. It is **not** available on the Mac App Store — see [docs/MAC_APP_STORE.md](docs/MAC_APP_STORE.md) for why.
 
 ## Requirements
 
@@ -31,11 +33,28 @@ See [INSTALL.md](INSTALL.md) for detailed installation instructions.
 - ✅ **Auto-start backend** - No terminal commands needed
 - ✅ **Clean shutdown** - Backend terminates when app quits
 
-## Project Status
+## Releasing
 
-✅ **v0.1.0 - macOS Distribution Ready**
+Releases are built automatically by GitHub Actions on any tag matching `v*`.
 
-All phases complete. The app is packaged and ready for distribution.
+```bash
+git tag v0.2.1
+git push origin v0.2.1
+```
+
+The workflow ([.github/workflows/release.yml](.github/workflows/release.yml)):
+
+1. Builds the Python backend with PyInstaller.
+2. Downloads the bundled ffmpeg binary.
+3. Ad-hoc signs both binaries ([scripts/adhoc-sign-binaries.sh](scripts/adhoc-sign-binaries.sh)).
+4. Builds the Tauri `.app` + `.dmg`.
+5. Uploads the DMG as a **draft** GitHub Release asset with SHA-256 in the release notes. Review and publish manually.
+
+### Potential follow-ups (not done yet)
+
+- **Auto-updates.** Wire up `tauri-plugin-updater` + a `update.json` manifest on GitHub Releases so the Gatekeeper approval becomes a one-time cost per user, not per release. Requires running `npx tauri signer generate` once and adding the keypair to tauri.conf.json + GitHub secrets.
+- **Intel Mac support.** Currently arm64-only. A universal build would roughly double the DMG size but cover the last ~10% of Macs still on Intel.
+- **Signed + notarized build.** If you decide the $99/year is worth it, swap the ad-hoc signing for Developer ID + notarization. The workflow already has the steps in roughly the right place — just add the signing env vars and enable Tauri's bundled notarization hook.
 
 ## Building from Source
 
@@ -54,7 +73,7 @@ For developers who want to build from source or contribute to the project.
 
 1. **Clone repository:**
 ```bash
-git clone https://github.com/yourusername/video-transcriber.git
+git clone https://github.com/jeffclark/video-transcriber.git
 cd video-transcriber
 ```
 

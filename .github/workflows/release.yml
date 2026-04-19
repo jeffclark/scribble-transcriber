@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-macos-arm64:
+    runs-on: macos-14
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pyinstaller
+
+      - name: Build backend binary
+        working-directory: backend
+        run: |
+          pyinstaller --clean backend.spec
+          mkdir -p ../frontend/src-tauri/binaries
+          cp dist/scribble-backend/scribble-backend \
+             ../frontend/src-tauri/binaries/scribble-backend-aarch64-apple-darwin
+          chmod +x ../frontend/src-tauri/binaries/scribble-backend-aarch64-apple-darwin
+
+      - name: Download ffmpeg
+        working-directory: frontend/src-tauri/binaries
+        run: |
+          if [ ! -f ffmpeg-aarch64-apple-darwin ]; then
+            curl -L https://evermeet.cx/ffmpeg/getrelease/arm64/ffmpeg/zip -o ffmpeg.zip
+            unzip -o ffmpeg.zip
+            mv ffmpeg ffmpeg-aarch64-apple-darwin
+            chmod +x ffmpeg-aarch64-apple-darwin
+            rm ffmpeg.zip
+          fi
+
+      - name: Ad-hoc sign bundled binaries
+        run: bash scripts/adhoc-sign-binaries.sh
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build Tauri app
+        working-directory: frontend
+        run: npm run tauri:build
+
+      - name: Locate DMG
+        id: dmg
+        run: |
+          DMG_PATH=$(find frontend/src-tauri/target/release/bundle/dmg -name "*.dmg" -print -quit)
+          if [ -z "$DMG_PATH" ]; then
+            echo "DMG not found" >&2
+            exit 1
+          fi
+          DMG_NAME=$(basename "$DMG_PATH")
+          SHA=$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')
+          SIZE=$(stat -f%z "$DMG_PATH")
+          {
+            echo "path=$DMG_PATH"
+            echo "name=$DMG_NAME"
+            echo "sha256=$SHA"
+            echo "size=$SIZE"
+          } >> "$GITHUB_OUTPUT"
+          echo "## Build artifact" >> "$GITHUB_STEP_SUMMARY"
+          echo "- File: \`$DMG_NAME\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- SHA-256: \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Size: $SIZE bytes" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact (workflow_dispatch runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Scribble-macos-arm64
+          path: ${{ steps.dmg.outputs.path }}
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.dmg.outputs.path }}
+          draft: true
+          generate_release_notes: true
+          body: |
+            ## Scribble ${{ github.ref_name }}
+
+            **macOS (Apple Silicon only)**
+
+            | File | SHA-256 |
+            |------|---------|
+            | `${{ steps.dmg.outputs.name }}` | `${{ steps.dmg.outputs.sha256 }}` |
+
+            ### First-time install
+
+            This app is not signed with an Apple Developer ID, so macOS Gatekeeper will block it on first launch. See [install instructions](https://github.com/${{ github.repository }}/blob/main/docs/INSTALL_UNSIGNED.md) for the workaround (one-time, per-user).
+
+            ### Requirements
+            - macOS 11.0 or later
+            - Apple Silicon (M1/M2/M3/M4) — Intel Macs not supported
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
