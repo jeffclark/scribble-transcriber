@@ -32,6 +32,8 @@ hidden_imports = [
     'src.utils',
     'src.utils.security',
     'src.utils.validation',
+    'src.services.youtube_downloader',
+    'yt_dlp',
 ]
 
 # Add faster-whisper and its dependencies
@@ -39,6 +41,7 @@ hidden_imports = [
 # We DO NOT include torch here - it's only used for device detection
 # which we've replaced with subprocess calls (saves 250MB)
 hidden_imports += collect_submodules('faster_whisper')
+hidden_imports += collect_submodules('yt_dlp')
 
 # Collect data files
 datas = []

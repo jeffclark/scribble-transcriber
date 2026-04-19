@@ -92,6 +92,11 @@ function App() {
     files.forEach((file) => addFile(file));
   };
 
+  // Handle adding a YouTube URL
+  const handleYoutubeUrlAdded = (file: QueuedFile) => {
+    addFile(file);
+  };
+
   // Open folder in native file explorer (Custom Tauri Command)
   const handleOpenFolder = async (folderPath: string) => {
     try {
@@ -153,7 +158,8 @@ function App() {
 
         // Use SSE for real-time progress updates
         await transcribeWithProgress({
-          filePath: file.path,
+          filePath: file.source === "file" ? file.path : undefined,
+          youtubeUrl: file.source === "youtube" ? file.youtubeUrl : undefined,
           modelSize: "base",  // Changed from "turbo" to "base" for faster CPU processing
           beamSize: 5,
           authToken: state.authToken,
@@ -255,6 +261,8 @@ function App() {
         <section className="mb-8">
           <FileUpload
             onFilesAdded={handleFilesAdded}
+            onYoutubeUrlAdded={handleYoutubeUrlAdded}
+            authToken={state.authToken}
             disabled={!state.backendConnected || isInitializing}
           />
         </section>

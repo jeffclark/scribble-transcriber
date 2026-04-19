@@ -33,7 +33,8 @@ fn main() {
             commands::open_folder,
             commands::check_health,
             commands::fetch_auth_token,
-            commands::transcribe_video
+            commands::transcribe_video,
+            commands::fetch_youtube_info
         ])
         .setup(|app| {
             let backend_process = app.state::<BackendProcess>();

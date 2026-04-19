@@ -8,6 +8,7 @@ import type {
   TranscribeRequest,
   TranscribeResponse,
   HealthResponse,
+  YoutubeInfoResponse,
 } from "../types/transcription";
 
 // Stored auth token
@@ -95,6 +96,19 @@ export async function transcribeVideo(
 
     throw new Error(`Transcription failed: ${error}`);
   }
+}
+
+/**
+ * Fetch YouTube video info (title, duration) without downloading
+ */
+export async function fetchYoutubeInfo(
+  url: string,
+  token: string
+): Promise<YoutubeInfoResponse> {
+  return await invoke<YoutubeInfoResponse>("fetch_youtube_info", {
+    url,
+    authToken: token,
+  });
 }
 
 /**

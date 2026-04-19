@@ -20,7 +20,8 @@ interface ProgressData {
 }
 
 interface TranscriptionProgressOptions {
-  filePath: string;
+  filePath?: string;
+  youtubeUrl?: string;
   modelSize: string;
   beamSize: number;
   authToken: string;
@@ -34,16 +35,20 @@ interface TranscriptionProgressOptions {
  * Returns a promise that resolves when transcription completes or rejects on error.
  */
 export function transcribeWithProgress(options: TranscriptionProgressOptions): Promise<TranscribeResponse> {
-  const { filePath, modelSize, beamSize, authToken, onProgress, onComplete, onError } = options;
+  const { filePath, youtubeUrl, modelSize, beamSize, authToken, onProgress, onComplete, onError } = options;
 
   return new Promise<TranscribeResponse>((resolve, reject) => {
-    // Build query string
+    // Build query string — exactly one of file_path or youtube_url must be set
     const params = new URLSearchParams({
-      file_path: filePath,
       model_size: modelSize,
       beam_size: beamSize.toString(),
       token: authToken, // Note: EventSource doesn't support custom headers
     });
+    if (youtubeUrl) {
+      params.set("youtube_url", youtubeUrl);
+    } else {
+      params.set("file_path", filePath!);
+    }
 
     const url = `http://127.0.0.1:8765/transcribe-stream?${params}`;
 
@@ -80,6 +85,7 @@ export function transcribeWithProgress(options: TranscriptionProgressOptions): P
             console.log('📡 Connection confirmed by backend');
             break;
 
+          case 'downloading':
           case 'validating':
           case 'extracting':
           case 'loading':

@@ -127,6 +127,36 @@ pub async fn transcribe_video(
         .map_err(|e| format!("Failed to parse response: {}", e))
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct YoutubeInfoResponse {
+    pub title: String,
+    pub video_id: String,
+    pub duration: f64,
+    pub uploader: String,
+}
+
+#[tauri::command]
+pub async fn fetch_youtube_info(url: String, auth_token: String) -> Result<YoutubeInfoResponse, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{}/youtube-info", API_BASE_URL))
+        .query(&[("url", &url), ("token", &auth_token)])
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect to backend: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("YouTube info failed ({}): {}", status, error_text));
+    }
+
+    response
+        .json::<YoutubeInfoResponse>()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
+}
+
 #[tauri::command]
 pub fn open_folder(path: String) -> Result<(), String> {
     // 1. Validate and canonicalize the path

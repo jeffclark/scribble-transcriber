@@ -103,7 +103,11 @@ export default function FileQueue({ files, onRemove, onOpenFolder }: FileQueuePr
           <div className="flex-1 min-w-0">
             <p className="font-medium text-gray-900 truncate">{file.name}</p>
             <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-              <span>{formatFileSize(file.size)}</span>
+              {file.source === "youtube" ? (
+                <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">YouTube</span>
+              ) : (
+                <span>{formatFileSize(file.size)}</span>
+              )}
               <span className={`font-medium ${getFileStatusColor(file)}`}>
                 {file.status.toUpperCase()}
               </span>
@@ -175,11 +179,9 @@ export default function FileQueue({ files, onRemove, onOpenFolder }: FileQueuePr
                   // Extract directory from first output file path
                   const outputPath = file.outputs?.json || file.outputs?.txt;
                   if (outputPath) {
-                    // Get directory containing the output files
                     const directory = outputPath.substring(0, outputPath.lastIndexOf('/'));
                     onOpenFolder(directory);
-                  } else {
-                    // Fallback: use video file directory (outputs should be there)
+                  } else if (file.source === "file" && file.path) {
                     const videoDir = file.path.substring(0, file.path.lastIndexOf('/'));
                     onOpenFolder(videoDir);
                   }

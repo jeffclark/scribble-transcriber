@@ -23,8 +23,13 @@ export function usePersistedQueue() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed: SerializedState = JSON.parse(saved);
+        // Migrate legacy entries that lack the `source` field
+        const migratedQueue: [string, QueuedFile][] = parsed.queue.map(([id, file]) => [
+          id,
+          { ...file, source: (file as any).source ?? "file" } as QueuedFile,
+        ]);
         return {
-          queue: new Map(parsed.queue),
+          queue: new Map(migratedQueue),
           currentlyProcessing: parsed.currentlyProcessing,
           backendConnected: parsed.backendConnected,
           authToken: parsed.authToken,
