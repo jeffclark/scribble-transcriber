@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,8 +12,17 @@ from ..models.responses import TranscribeResponse, TranscriptionMetadata, Transc
 from ..utils.validation import VideoValidationError, validate_video_path
 from .audio_processor import AudioExtractionError, extract_audio, get_video_duration, validate_audio_track
 from .gpu_manager import GPUManager
+from .youtube_downloader import YoutubeDownloadError, download_youtube_audio
 
 logger = logging.getLogger(__name__)
+
+_UNSAFE_FILENAME_CHARS = re.compile(r'[/\\:*?"<>|]')
+
+
+def _sanitize_filename(title: str) -> str:
+    """Replace filesystem-unsafe characters and trim the result."""
+    sanitized = _UNSAFE_FILENAME_CHARS.sub("_", title)
+    return sanitized.strip(". ")[:200] or "youtube_video"
 
 
 class TranscriptionService:
@@ -46,17 +56,19 @@ class TranscriptionService:
 
     async def transcribe(
         self,
-        file_path: str,
+        file_path: Optional[str] = None,
+        youtube_url: Optional[str] = None,
         model_size: str = "turbo",
         language: Optional[str] = None,
         beam_size: int = 5,
         progress_callback: Optional[Callable[[dict], None]] = None,
     ) -> TranscribeResponse:
         """
-        Transcribe a video file and return structured results.
+        Transcribe a video file or YouTube URL and return structured results.
 
         Args:
-            file_path: Path to video file
+            file_path: Path to local video file (mutually exclusive with youtube_url)
+            youtube_url: YouTube URL to download and transcribe (mutually exclusive with file_path)
             model_size: Whisper model size (tiny, base, small, medium, large-v2, turbo)
             language: Optional language code (None for auto-detection)
             beam_size: Beam size for decoding (1-10, default 5)
@@ -68,47 +80,75 @@ class TranscriptionService:
         Raises:
             VideoValidationError: If file validation fails
             AudioExtractionError: If audio extraction fails
+            YoutubeDownloadError: If YouTube download fails
             RuntimeError: If transcription fails
         """
-        logger.info(f"Starting transcription for: {file_path}")
+        source = file_path or youtube_url
+        logger.info(f"Starting transcription for: {source}")
 
         # Helper to emit progress
         def emit_progress(stage: str, progress: int, message: str, **extra):
-            # Log progress to console/file for debugging
             logger.info(f"📊 Progress: {progress}% - {message} (stage: {stage})")
-
             if progress_callback:
-                progress_callback({
-                    "stage": stage,
-                    "progress": progress,
-                    "message": message,
-                    **extra
-                })
+                progress_callback({"stage": stage, "progress": progress, "message": message, **extra})
 
-        # 1. Validate video file path (security checks)
-        emit_progress("validating", 0, "Validating video file...")
-        try:
-            video_path = validate_video_path(file_path)
-        except VideoValidationError as e:
-            logger.error(f"Validation failed: {e}")
-            raise
+        # --- Phase 1: Source setup ---
+        # Result: audio_data (bytes), source_name (str), duration (float|None), output_dir (Path), base_name (str)
 
-        # 2. Check for audio track
-        emit_progress("validating", 5, "Checking audio track...")
-        if not validate_audio_track(video_path):
-            raise AudioExtractionError(f"Video file has no audio track: {video_path.name}")
+        if youtube_url:
+            # YouTube flow: download audio, convert to PCM WAV via extract_audio()
+            yt_temp_path: Optional[Path] = None
+            try:
+                yt_temp_path, yt_info = download_youtube_audio(
+                    youtube_url,
+                    progress_callback=progress_callback,  # raw dict callback
+                )
+                audio_data = extract_audio(yt_temp_path)
+                emit_progress("extracting", 16, f"Audio prepared: {len(audio_data)} bytes")
+            except (YoutubeDownloadError, AudioExtractionError):
+                raise
+            except Exception as e:
+                raise YoutubeDownloadError(f"Failed to prepare YouTube audio: {e}") from e
+            finally:
+                if yt_temp_path is not None:
+                    yt_temp_path.unlink(missing_ok=True)
 
-        # 3. Extract audio
-        emit_progress("extracting", 5, "Extracting audio...")
-        try:
-            audio_data = extract_audio(video_path)
-            emit_progress("extracting", 10, f"Audio extracted: {len(audio_data)} bytes")
-        except AudioExtractionError as e:
-            logger.error(f"Audio extraction failed: {e}")
-            raise
+            source_name = _sanitize_filename(yt_info.get("title", "youtube_video"))
+            base_name = source_name
+            duration: Optional[float] = yt_info.get("duration") or None
+            output_dir = Path.home() / "Downloads"
 
-        # 4. Get model
-        emit_progress("loading", 10, f"Loading {model_size} model...")
+            emit_progress("loading", 18, f"Loading {model_size} model...")
+
+        else:
+            # Local file flow
+            emit_progress("validating", 0, "Validating video file...")
+            try:
+                video_path = validate_video_path(file_path)
+            except VideoValidationError as e:
+                logger.error(f"Validation failed: {e}")
+                raise
+
+            emit_progress("validating", 5, "Checking audio track...")
+            if not validate_audio_track(video_path):
+                raise AudioExtractionError(f"Video file has no audio track: {video_path.name}")
+
+            emit_progress("extracting", 5, "Extracting audio...")
+            try:
+                audio_data = extract_audio(video_path)
+                emit_progress("extracting", 10, f"Audio extracted: {len(audio_data)} bytes")
+            except AudioExtractionError as e:
+                logger.error(f"Audio extraction failed: {e}")
+                raise
+
+            source_name = video_path.name
+            base_name = video_path.stem
+            duration = None  # will probe below
+            output_dir = video_path.parent
+
+            emit_progress("loading", 10, f"Loading {model_size} model...")
+
+        # --- Phase 2: Load model ---
         try:
             model = self.gpu_manager.get_model(model_size)
             emit_progress("loading", 20, "Model loaded successfully")
@@ -116,14 +156,13 @@ class TranscriptionService:
             logger.error(f"Failed to load model: {e}")
             raise
 
-        # 5. Transcribe with incremental progress
+        # --- Phase 3: Transcribe ---
         emit_progress("transcribing", 20, "Starting transcription...")
 
         try:
             logger.info(f"Transcribing with {model_size} model, beam_size={beam_size}")
 
-            # Save audio to temp file for faster-whisper
-            # (faster-whisper expects file path, not bytes)
+            # Save audio to temp file for faster-whisper (expects file path, not bytes)
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio:
                 temp_audio.write(audio_data)
                 temp_audio_path = temp_audio.name
@@ -132,35 +171,30 @@ class TranscriptionService:
                 segments_gen, info = model.transcribe(
                     temp_audio_path,
                     beam_size=beam_size,
-                    vad_filter=True,  # Voice Activity Detection for better accuracy
+                    vad_filter=True,
                     language=language,
                 )
 
-                # CRITICAL: Process segments incrementally instead of list()
                 segments_list = []
                 segment_count = 0
 
-                # Get estimated duration for progress calculation
-                try:
-                    duration = get_video_duration(video_path)
-                except AudioExtractionError:
-                    duration = None
+                # For file-based flow, probe duration now if we don't have it
+                if duration is None and not youtube_url:
+                    try:
+                        duration = get_video_duration(video_path)
+                    except (AudioExtractionError, NameError):
+                        duration = None
 
-                # Estimate total segments based on duration
-                # Whisper typically creates segments of 5-8 seconds, use 7 as average
                 estimated_total_segments = int(duration / 7) if duration else None
 
                 for segment in segments_gen:
                     segments_list.append(segment)
                     segment_count += 1
 
-                    # Report progress every 5 segments
                     if segment_count % 5 == 0:
-                        # Progress from 20% to 95% based on time
                         if duration:
                             progress = min(20 + int((segment.end / duration) * 75), 95)
                         else:
-                            # Fallback: estimate based on segment count
                             progress = min(20 + (segment_count * 2), 95)
 
                         emit_progress(
@@ -169,7 +203,7 @@ class TranscriptionService:
                             f"Transcribing: {segment_count} segments processed",
                             segment_count=segment_count,
                             estimated_total_segments=estimated_total_segments,
-                            current_time=segment.end
+                            current_time=segment.end,
                         )
 
                 emit_progress(
@@ -177,7 +211,7 @@ class TranscriptionService:
                     90,
                     f"Transcription complete: {len(segments_list)} segments",
                     segment_count=len(segments_list),
-                    estimated_total_segments=len(segments_list)  # Now we know the actual total
+                    estimated_total_segments=len(segments_list),
                 )
 
                 logger.info(
@@ -186,7 +220,6 @@ class TranscriptionService:
                 )
 
             finally:
-                # Cleanup temp audio file
                 Path(temp_audio_path).unlink(missing_ok=True)
 
         except Exception as e:
@@ -194,23 +227,16 @@ class TranscriptionService:
             raise RuntimeError(f"Transcription failed: {e}")
 
         finally:
-            # CRITICAL: Cleanup GPU memory after transcription
-            # Fixes 300MB memory leak per transcription
             self.gpu_manager.cleanup_after_transcription()
 
-        # 6. Get video duration (if not already obtained)
+        # --- Phase 4: Format and save ---
         if duration is None:
-            try:
-                duration = get_video_duration(video_path)
-            except AudioExtractionError:
-                # If duration probe fails, estimate from last segment
-                duration = segments_list[-1].end if segments_list else 0.0
+            duration = segments_list[-1].end if segments_list else 0.0
 
-        # 7. Format outputs
         device_info = self.gpu_manager.get_device_info()
 
         metadata = TranscriptionMetadata(
-            source_file=video_path.name,
+            source_file=source_name,
             transcription_date=datetime.now(timezone.utc).isoformat(),
             model=model_size,
             device=device_info["device"],
@@ -224,35 +250,27 @@ class TranscriptionService:
             for i, seg in enumerate(segments_list)
         ]
 
-        # 8. Save output files
         emit_progress("saving", 95, "Saving output files...")
-        output_files = self._save_outputs(video_path, metadata, transcription_segments)
-
-        # Note: Don't send "completed" stage here - it's sent from main.py with full result
-        # This prevents frontend from receiving incomplete completion messages
+        output_files = self._save_outputs(output_dir, base_name, metadata, transcription_segments)
 
         return TranscribeResponse(metadata=metadata, segments=transcription_segments, output_files=output_files)
 
     def _save_outputs(
-        self, video_path: Path, metadata: TranscriptionMetadata, segments: list
+        self, output_dir: Path, base_name: str, metadata: TranscriptionMetadata, segments: list
     ) -> dict:
         """
         Save transcription outputs in JSON and plain text formats.
 
-        Files are saved in same directory as source video:
-        - video_transcript.json
-        - video_transcript.txt
-
         Args:
-            video_path: Path to source video
+            output_dir: Directory to save output files
+            base_name: Filename stem to use for output files
             metadata: Transcription metadata
             segments: List of transcription segments
 
         Returns:
             dict: Paths to output files {"json": "...", "txt": "..."}
         """
-        base_name = video_path.stem
-        output_dir = video_path.parent
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate output paths with conflict resolution
         json_path = self._get_unique_path(output_dir / f"{base_name}_transcript.json")

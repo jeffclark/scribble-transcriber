@@ -3,7 +3,7 @@
 from pathlib import Path
 
 # Allowed video file extensions
-ALLOWED_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".m4v"}
+ALLOWED_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".m4v", ".m4a", ".mp3", ".wav", ".aac", ".ogg", ".flac"}
 
 # Sensitive system directories that should never be accessed
 SENSITIVE_PATHS = [

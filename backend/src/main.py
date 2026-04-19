@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from .models.requests import TranscribeRequest
 from .models.responses import TranscribeResponse
 from .services.transcription import TranscriptionService
+from .services.youtube_downloader import YoutubeDownloadError, fetch_youtube_info
 from .utils.security import generate_auth_token, get_auth_token, verify_token, verify_token_value
 from .utils.validation import VideoValidationError
 
@@ -142,10 +143,12 @@ async def transcribe(request: TranscribeRequest, _: str = Depends(verify_token))
         HTTPException: 400 for validation errors, 404 for file not found, 500 for server errors
     """
     try:
-        logger.info(f"Received transcription request: {request.file_path}")
+        source = request.file_path or request.youtube_url
+        logger.info(f"Received transcription request: {source}")
 
         result = await transcription_service.transcribe(
             file_path=request.file_path,
+            youtube_url=request.youtube_url,
             model_size=request.model_size,
             language=request.language,
             beam_size=request.beam_size,
@@ -173,6 +176,32 @@ async def transcribe(request: TranscribeRequest, _: str = Depends(verify_token))
         )
 
 
+@app.get("/youtube-info")
+async def youtube_info(
+    url: str = Query(..., description="YouTube video URL"),
+    token: str = Query(..., description="Authentication token"),
+):
+    """
+    Fetch metadata for a YouTube video without downloading it.
+
+    Requires authentication via token query parameter.
+
+    Returns:
+        dict: title, video_id, duration, uploader
+    """
+    if not verify_token_value(token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
+
+    try:
+        info = fetch_youtube_info(url)
+        return info
+    except YoutubeDownloadError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"YouTube info error: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch video info: {e}")
+
+
 def format_sse(data: dict) -> str:
     """Format data as Server-Sent Event."""
     return f"data: {json.dumps(data)}\n\n"
@@ -180,7 +209,8 @@ def format_sse(data: dict) -> str:
 
 @app.get("/transcribe-stream")
 async def transcribe_stream(
-    file_path: str = Query(..., description="Path to video file"),
+    file_path: str = Query(None, description="Path to video file"),
+    youtube_url: str = Query(None, description="YouTube URL to transcribe"),
     model_size: str = Query("turbo", description="Whisper model size"),
     beam_size: int = Query(5, description="Beam size for decoding"),
     language: str = Query(None, description="Optional language code"),
@@ -216,9 +246,13 @@ async def transcribe_stream(
     if not verify_token_value(token):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
 
+    if not file_path and not youtube_url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide file_path or youtube_url")
+
     async def event_generator():
         try:
-            logger.info(f"Starting streaming transcription: {file_path}")
+            source = file_path or youtube_url
+            logger.info(f"Starting streaming transcription: {source}")
 
             # Send immediate connection confirmation (prevents buffering)
             yield format_sse({
@@ -269,6 +303,7 @@ async def transcribe_stream(
                             result = loop.run_until_complete(
                                 transcription_service.transcribe(
                                     file_path=file_path,
+                                    youtube_url=youtube_url,
                                     model_size=model_size,
                                     language=language if language else None,
                                     beam_size=beam_size,

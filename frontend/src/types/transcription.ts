@@ -9,14 +9,18 @@ export type QueuedFile =
       status: "pending";
       id: string;
       name: string;
-      path: string;
+      source: "file" | "youtube";
+      path?: string;
+      youtubeUrl?: string;
       size: number;
     }
   | {
       status: "processing";
       id: string;
       name: string;
-      path: string;
+      source: "file" | "youtube";
+      path?: string;
+      youtubeUrl?: string;
       size: number;
       progress: number;
       progressMessage?: string;  // Optional stage message
@@ -27,7 +31,9 @@ export type QueuedFile =
       status: "completed";
       id: string;
       name: string;
-      path: string;
+      source: "file" | "youtube";
+      path?: string;
+      youtubeUrl?: string;
       size: number;
       outputs: OutputFiles;
     }
@@ -35,7 +41,9 @@ export type QueuedFile =
       status: "failed";
       id: string;
       name: string;
-      path: string;
+      source: "file" | "youtube";
+      path?: string;
+      youtubeUrl?: string;
       size: number;
       error: string;
     };
@@ -81,10 +89,18 @@ export type SerializedState = {
 // API types matching backend Pydantic models
 
 export type TranscribeRequest = {
-  file_path: string;
+  file_path?: string;
+  youtube_url?: string;
   model_size?: string;
   language?: string | null;
   beam_size?: number;
+};
+
+export type YoutubeInfoResponse = {
+  title: string;
+  video_id: string;
+  duration: number;
+  uploader: string;
 };
 
 export type TranscriptionSegment = {
