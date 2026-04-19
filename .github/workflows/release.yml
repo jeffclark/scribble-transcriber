@@ -46,15 +46,17 @@ jobs:
              ../frontend/src-tauri/binaries/scribble-backend-aarch64-apple-darwin
           chmod +x ../frontend/src-tauri/binaries/scribble-backend-aarch64-apple-darwin
 
-      - name: Download ffmpeg
+      - name: Download ffmpeg (arm64 static build from osxexperts.net)
         working-directory: frontend/src-tauri/binaries
         run: |
           if [ ! -f ffmpeg-aarch64-apple-darwin ]; then
-            curl -L https://evermeet.cx/ffmpeg/getrelease/arm64/ffmpeg/zip -o ffmpeg.zip
+            curl -fL https://www.osxexperts.net/ffmpeg81arm.zip -o ffmpeg.zip
+            file ffmpeg.zip
             unzip -o ffmpeg.zip
             mv ffmpeg ffmpeg-aarch64-apple-darwin
             chmod +x ffmpeg-aarch64-apple-darwin
             rm ffmpeg.zip
+            ./ffmpeg-aarch64-apple-darwin -version | head -1
           fi
 
       - name: Ad-hoc sign bundled binaries

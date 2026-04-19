@@ -96,7 +96,7 @@ chmod +x ../frontend/src-tauri/binaries/scribble-backend-aarch64-apple-darwin
 3. **Download FFmpeg binary:**
 ```bash
 cd ../frontend/src-tauri/binaries
-curl -L https://evermeet.cx/ffmpeg/getrelease/arm64/ffmpeg/zip -o ffmpeg.zip
+curl -L https://www.osxexperts.net/ffmpeg81arm.zip -o ffmpeg.zip
 unzip ffmpeg.zip
 mv ffmpeg ffmpeg-aarch64-apple-darwin
 chmod +x ffmpeg-aarch64-apple-darwin
