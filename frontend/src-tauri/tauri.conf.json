@@ -1,6 +1,6 @@
 {
   "productName": "Scribble",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.scribble.transcriber",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -22,6 +22,10 @@
       "binaries/scribble-backend",
       "binaries/ffmpeg"
     ],
+    "copyright": "Copyright © 2026 Jeff Clark",
+    "category": "public.app-category.productivity",
+    "shortDescription": "Local video transcription with Whisper",
+    "longDescription": "Scribble transcribes videos and audio using local Whisper models. All transcription happens on your Mac — no cloud services, no data sent anywhere. Supports local files and YouTube URLs.",
     "macOS": {
       "minimumSystemVersion": "11.0"
     }

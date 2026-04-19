@@ -1,8 +1,8 @@
 [package]
 name = "video-transcriber"
-version = "0.1.0"
+version = "0.2.0"
 description = "Desktop video transcription with local Whisper models"
-authors = ["you"]
+authors = ["Jeff Clark"]
 edition = "2021"
 
 [build-dependencies]
