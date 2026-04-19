@@ -67,5 +67,10 @@ dist/
 # Rust/Tauri build artifacts
 frontend/src-tauri/target/
 
+# Bundled binaries — built by CI, not committed to git
+# Run scripts/adhoc-sign-binaries.sh + npm run tauri:build to regenerate locally
+frontend/src-tauri/binaries/scribble-backend-aarch64-apple-darwin
+frontend/src-tauri/binaries/ffmpeg-aarch64-apple-darwin
+
 # Claude Code worktrees
 .claude/worktrees/
