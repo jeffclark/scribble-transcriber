@@ -1,5 +1,7 @@
 """Pydantic response models for type-safe API responses."""
 
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -10,8 +12,9 @@ class TranscriptionSegment(BaseModel):
     start: float
     end: float
     text: str
+    speaker: Optional[str] = None
 
-    model_config = {"json_schema_extra": {"example": {"id": 0, "start": 0.0, "end": 3.5, "text": "Welcome to today's meeting."}}}
+    model_config = {"json_schema_extra": {"example": {"id": 0, "start": 0.0, "end": 3.5, "text": "Welcome to today's meeting.", "speaker": "Speaker 1"}}}
 
 
 class TranscriptionMetadata(BaseModel):

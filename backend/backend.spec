@@ -43,9 +43,25 @@ hidden_imports = [
 hidden_imports += collect_submodules('faster_whisper')
 hidden_imports += collect_submodules('yt_dlp')
 
+# Speaker diarization (offline, no torch)
+hidden_imports += [
+    'src.services.diarization',
+    'librosa',
+    'sklearn',
+    'sklearn.cluster',
+    'sklearn.cluster._agglomerative',
+    'sklearn.preprocessing',
+    'sklearn.preprocessing._data',
+    'soundfile',
+]
+hidden_imports += collect_submodules('librosa')
+hidden_imports += collect_submodules('sklearn')
+
 # Collect data files
 datas = []
 datas += collect_data_files('faster_whisper')
+datas += collect_data_files('librosa')
+datas += collect_data_files('sklearn')
 
 # Include the entire src directory as data
 datas += [('src', 'src')]
