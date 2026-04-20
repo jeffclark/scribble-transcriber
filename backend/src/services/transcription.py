@@ -229,6 +229,17 @@ class TranscriptionService:
         finally:
             self.gpu_manager.cleanup_after_transcription()
 
+        # --- Phase 3.5: Diarize ---
+        emit_progress("diarizing", 90, "Identifying speakers...")
+        try:
+            from .diarization import diarize_segments
+            speaker_labels = diarize_segments(audio_data, segments_list)
+            logger.info(f"Diarization complete: {len(set(speaker_labels))} speaker(s) detected")
+        except Exception as e:
+            logger.warning(f"Diarization failed, skipping: {e}")
+            speaker_labels = ["Speaker 1"] * len(segments_list)
+        emit_progress("diarizing", 93, "Speakers identified")
+
         # --- Phase 4: Format and save ---
         if duration is None:
             duration = segments_list[-1].end if segments_list else 0.0
@@ -246,7 +257,13 @@ class TranscriptionService:
         )
 
         transcription_segments = [
-            TranscriptionSegment(id=i, start=float(seg.start), end=float(seg.end), text=seg.text.strip())
+            TranscriptionSegment(
+                id=i,
+                start=float(seg.start),
+                end=float(seg.end),
+                text=seg.text.strip(),
+                speaker=speaker_labels[i],
+            )
             for i, seg in enumerate(segments_list)
         ]
 
@@ -254,6 +271,13 @@ class TranscriptionService:
         output_files = self._save_outputs(output_dir, base_name, metadata, transcription_segments)
 
         return TranscribeResponse(metadata=metadata, segments=transcription_segments, output_files=output_files)
+
+    @staticmethod
+    def _format_timestamp(seconds: float) -> str:
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        s = int(seconds % 60)
+        return f"{h:02d}:{m:02d}:{s:02d}"
 
     def _save_outputs(
         self, output_dir: Path, base_name: str, metadata: TranscriptionMetadata, segments: list
@@ -284,8 +308,11 @@ class TranscriptionService:
 
         logger.info(f"Saved JSON output: {json_path}")
 
-        # Save plain text
-        txt_output = "\n".join(seg.text for seg in segments)
+        # Save plain text with timestamps and speaker labels
+        txt_output = "\n".join(
+            f"[{self._format_timestamp(seg.start)}] {seg.speaker or 'Speaker 1'}: {seg.text}"
+            for seg in segments
+        )
 
         with open(txt_path, "w", encoding="utf-8") as f:
             f.write(txt_output)

@@ -7,6 +7,9 @@ pydantic>=2.6.0
 faster-whisper>=1.0.0
 # torch removed - not needed (faster-whisper uses ctranslate2)
 # Saves 250MB bundle size + 200MB RAM + 400ms startup
+librosa>=0.10.0
+scikit-learn>=1.3.0
+soundfile>=0.12.0
 
 # Video processing
 ffmpeg-python>=0.2.0
