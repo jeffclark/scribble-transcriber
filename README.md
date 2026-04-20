@@ -8,6 +8,10 @@ Desktop application for batch video transcription using local Whisper models. Al
 
 Scribble is not signed with an Apple Developer ID, so macOS Gatekeeper blocks it on first launch. The workaround is one-time per Mac. See [docs/INSTALL_UNSIGNED.md](docs/INSTALL_UNSIGNED.md) for step-by-step instructions (macOS 14 and macOS 15 are different).
 
+### Run from source (one click)
+
+If you have the repo checked out, double-click [`launch.command`](launch.command) in Finder. It builds the backend binary, downloads ffmpeg, and produces `Scribble.app` the first time (5–10 min); subsequent launches only rebuild what's stale and open straight into the app. Locally-built bundles skip Gatekeeper entirely. Requires `python3`, `node`, `npm`, and `cargo` on PATH.
+
 > **Note on distribution:** Scribble is distributed as a free unsigned DMG. It is **not** available on the Mac App Store — see [docs/MAC_APP_STORE.md](docs/MAC_APP_STORE.md) for why.
 
 ## Requirements
