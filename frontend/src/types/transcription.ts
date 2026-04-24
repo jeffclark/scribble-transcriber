@@ -9,18 +9,18 @@ export type QueuedFile =
       status: "pending";
       id: string;
       name: string;
-      source: "file" | "youtube";
+      source: "file" | "youtube" | "loom";
       path?: string;
-      youtubeUrl?: string;
+      videoUrl?: string;
       size: number;
     }
   | {
       status: "processing";
       id: string;
       name: string;
-      source: "file" | "youtube";
+      source: "file" | "youtube" | "loom";
       path?: string;
-      youtubeUrl?: string;
+      videoUrl?: string;
       size: number;
       progress: number;
       progressMessage?: string;  // Optional stage message
@@ -31,9 +31,9 @@ export type QueuedFile =
       status: "completed";
       id: string;
       name: string;
-      source: "file" | "youtube";
+      source: "file" | "youtube" | "loom";
       path?: string;
-      youtubeUrl?: string;
+      videoUrl?: string;
       size: number;
       outputs: OutputFiles;
     }
@@ -41,9 +41,9 @@ export type QueuedFile =
       status: "failed";
       id: string;
       name: string;
-      source: "file" | "youtube";
+      source: "file" | "youtube" | "loom";
       path?: string;
-      youtubeUrl?: string;
+      videoUrl?: string;
       size: number;
       error: string;
     };

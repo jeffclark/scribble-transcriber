@@ -21,7 +21,7 @@ interface ProgressData {
 
 interface TranscriptionProgressOptions {
   filePath?: string;
-  youtubeUrl?: string;
+  videoUrl?: string;
   modelSize: string;
   beamSize: number;
   authToken: string;
@@ -35,17 +35,18 @@ interface TranscriptionProgressOptions {
  * Returns a promise that resolves when transcription completes or rejects on error.
  */
 export function transcribeWithProgress(options: TranscriptionProgressOptions): Promise<TranscribeResponse> {
-  const { filePath, youtubeUrl, modelSize, beamSize, authToken, onProgress, onComplete, onError } = options;
+  const { filePath, videoUrl, modelSize, beamSize, authToken, onProgress, onComplete, onError } = options;
 
   return new Promise<TranscribeResponse>((resolve, reject) => {
     // Build query string — exactly one of file_path or youtube_url must be set
+    // (backend still uses "youtube_url" as the wire param name; it accepts any supported video URL)
     const params = new URLSearchParams({
       model_size: modelSize,
       beam_size: beamSize.toString(),
       token: authToken, // Note: EventSource doesn't support custom headers
     });
-    if (youtubeUrl) {
-      params.set("youtube_url", youtubeUrl);
+    if (videoUrl) {
+      params.set("youtube_url", videoUrl);
     } else {
       params.set("file_path", filePath!);
     }
