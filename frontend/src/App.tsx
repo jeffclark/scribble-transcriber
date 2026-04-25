@@ -92,8 +92,8 @@ function App() {
     files.forEach((file) => addFile(file));
   };
 
-  // Handle adding a YouTube URL
-  const handleYoutubeUrlAdded = (file: QueuedFile) => {
+  // Handle adding a remote video URL (YouTube or Loom)
+  const handleVideoUrlAdded = (file: QueuedFile) => {
     addFile(file);
   };
 
@@ -159,7 +159,7 @@ function App() {
         // Use SSE for real-time progress updates
         await transcribeWithProgress({
           filePath: file.source === "file" ? file.path : undefined,
-          youtubeUrl: file.source === "youtube" ? file.youtubeUrl : undefined,
+          videoUrl: file.source === "file" ? undefined : file.videoUrl,
           modelSize: "base",  // Changed from "turbo" to "base" for faster CPU processing
           beamSize: 5,
           authToken: state.authToken,
@@ -261,7 +261,7 @@ function App() {
         <section className="mb-8">
           <FileUpload
             onFilesAdded={handleFilesAdded}
-            onYoutubeUrlAdded={handleYoutubeUrlAdded}
+            onVideoUrlAdded={handleVideoUrlAdded}
             authToken={state.authToken}
             disabled={!state.backendConnected || isInitializing}
           />

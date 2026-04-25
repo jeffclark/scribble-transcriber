@@ -105,6 +105,8 @@ export default function FileQueue({ files, onRemove, onOpenFolder }: FileQueuePr
             <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
               {file.source === "youtube" ? (
                 <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">YouTube</span>
+              ) : file.source === "loom" ? (
+                <span className="px-1.5 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-700 rounded">Loom</span>
               ) : (
                 <span>{formatFileSize(file.size)}</span>
               )}

@@ -1,4 +1,4 @@
-"""YouTube audio download service using yt-dlp."""
+"""Remote video audio download service using yt-dlp (YouTube, Loom, ...)."""
 
 import logging
 import os
@@ -15,22 +15,27 @@ YOUTUBE_URL_PATTERN = re.compile(
     r"[A-Za-z0-9_-]{11}"
 )
 
+LOOM_URL_PATTERN = re.compile(
+    r"^(https?://)?(www\.)?loom\.com/(share|embed)/[0-9a-f]{32}"
+)
+
 
 class YoutubeDownloadError(Exception):
-    """Raised when a YouTube download or info fetch fails."""
+    """Raised when a remote video download or info fetch fails."""
 
 
-def is_valid_youtube_url(url: str) -> bool:
-    """Return True if url looks like a YouTube video URL."""
-    return bool(YOUTUBE_URL_PATTERN.match(url.strip()))
+def is_valid_video_url(url: str) -> bool:
+    """Return True if url looks like a supported remote video URL (YouTube or Loom)."""
+    stripped = url.strip()
+    return bool(YOUTUBE_URL_PATTERN.match(stripped) or LOOM_URL_PATTERN.match(stripped))
 
 
 def fetch_youtube_info(url: str) -> dict:
     """
-    Fetch metadata for a YouTube video without downloading it.
+    Fetch metadata for a remote video (YouTube or Loom) without downloading it.
 
     Args:
-        url: YouTube video URL
+        url: Video URL (YouTube or Loom)
 
     Returns:
         dict with keys: title, video_id, duration, uploader
@@ -38,8 +43,8 @@ def fetch_youtube_info(url: str) -> dict:
     Raises:
         YoutubeDownloadError: If the URL is invalid or info fetch fails
     """
-    if not is_valid_youtube_url(url):
-        raise YoutubeDownloadError(f"Not a valid YouTube URL: {url}")
+    if not is_valid_video_url(url):
+        raise YoutubeDownloadError(f"Not a valid YouTube or Loom URL: {url}")
 
     try:
         import yt_dlp  # noqa: PLC0415
@@ -71,12 +76,12 @@ def download_youtube_audio(
     progress_callback: Optional[Callable[[dict], None]] = None,
 ) -> tuple[Path, dict]:
     """
-    Download the best audio stream from a YouTube URL to a temporary file.
+    Download the best audio stream from a remote video URL (YouTube or Loom) to a temporary file.
 
     The caller is responsible for deleting the returned file after use.
 
     Args:
-        url: YouTube video URL
+        url: Video URL (YouTube or Loom)
         progress_callback: Optional callback receiving progress dicts:
             {"stage": "downloading", "progress": int, "message": str}
 
@@ -86,8 +91,8 @@ def download_youtube_audio(
     Raises:
         YoutubeDownloadError: If download fails
     """
-    if not is_valid_youtube_url(url):
-        raise YoutubeDownloadError(f"Not a valid YouTube URL: {url}")
+    if not is_valid_video_url(url):
+        raise YoutubeDownloadError(f"Not a valid YouTube or Loom URL: {url}")
 
     try:
         import yt_dlp  # noqa: PLC0415
@@ -133,7 +138,8 @@ def download_youtube_audio(
     }
 
     if progress_callback:
-        progress_callback({"stage": "downloading", "progress": 2, "message": "Connecting to YouTube..."})
+        host = "Loom" if LOOM_URL_PATTERN.match(url.strip()) else "YouTube"
+        progress_callback({"stage": "downloading", "progress": 2, "message": f"Connecting to {host}..."})
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

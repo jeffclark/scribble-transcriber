@@ -11,15 +11,23 @@ const ALLOWED_EXTENSIONS = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".m
 const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024; // 10GB
 
 const YOUTUBE_URL_PATTERN = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/|embed\/)|youtu\.be\/)[A-Za-z0-9_-]{11}/;
+const LOOM_URL_PATTERN = /^(https?:\/\/)?(www\.)?loom\.com\/(share|embed)\/[0-9a-f]{32}/;
+
+function detectVideoUrlSource(url: string): "youtube" | "loom" | null {
+  const trimmed = url.trim();
+  if (YOUTUBE_URL_PATTERN.test(trimmed)) return "youtube";
+  if (LOOM_URL_PATTERN.test(trimmed)) return "loom";
+  return null;
+}
 
 interface FileUploadProps {
   onFilesAdded: (files: QueuedFile[]) => void;
-  onYoutubeUrlAdded: (file: QueuedFile) => void;
+  onVideoUrlAdded: (file: QueuedFile) => void;
   authToken: string | null;
   disabled?: boolean;
 }
 
-export default function FileUpload({ onFilesAdded, onYoutubeUrlAdded, authToken, disabled = false }: FileUploadProps) {
+export default function FileUpload({ onFilesAdded, onVideoUrlAdded, authToken, disabled = false }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -189,8 +197,9 @@ export default function FileUpload({ onFilesAdded, onYoutubeUrlAdded, authToken,
 
     if (!url) return;
 
-    if (!YOUTUBE_URL_PATTERN.test(url)) {
-      setUrlError("Please enter a valid YouTube URL (youtube.com or youtu.be)");
+    const source = detectVideoUrlSource(url);
+    if (!source) {
+      setUrlError("Please enter a valid YouTube (youtube.com, youtu.be) or Loom (loom.com/share/...) URL");
       return;
     }
 
@@ -206,11 +215,11 @@ export default function FileUpload({ onFilesAdded, onYoutubeUrlAdded, authToken,
         status: "pending",
         id: crypto.randomUUID(),
         name: info.title,
-        source: "youtube",
-        youtubeUrl: url,
+        source,
+        videoUrl: url,
         size: 0,
       };
-      onYoutubeUrlAdded(queuedFile);
+      onVideoUrlAdded(queuedFile);
       setUrlInput("");
     } catch (err) {
       setUrlError(`Could not fetch video info: ${err}`);
@@ -277,13 +286,13 @@ export default function FileUpload({ onFilesAdded, onYoutubeUrlAdded, authToken,
         <div className="flex-1 border-t border-gray-200" />
       </div>
 
-      {/* YouTube URL input */}
+      {/* Video URL input (YouTube or Loom) */}
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-gray-700">YouTube URL</label>
+        <label className="text-sm font-medium text-gray-700">Video URL (YouTube or Loom)</label>
         <div className="flex gap-2">
           <input
             type="url"
-            placeholder="https://youtube.com/watch?v=..."
+            placeholder="https://youtube.com/watch?v=... or https://loom.com/share/..."
             value={urlInput}
             onChange={(e) => { setUrlInput(e.target.value); setUrlError(null); }}
             onKeyDown={handleUrlKeyDown}
